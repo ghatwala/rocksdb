@@ -27,7 +27,7 @@ install:
   - pushd /tmp/ && curl -L https://github.com/gflags/gflags/archive/v2.1.2.tar.gz -o gflags.tar.gz && tar xfz gflags.tar.gz && cd gflags-2.1.2 && cmake . && make && popd
 
 before_script:
-  - if [[ "${TRAVIS_OS_NAME}" == 'linux' && "${CXX}" == 'clang' ]]; then CXX=clang++-3.6; fi
+  - if [[ "${TRAVIS_OS_NAME}" == 'linux' && "${CXX}" == 'clang++' ]]; then CXX=clang++-3.6; fi
   # Limit the maximum number of open file descriptors to 8192
   - ulimit -n 8192 || true
 
