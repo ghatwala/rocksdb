@@ -14,7 +14,7 @@ addons:
          - ubuntu-toolchain-r-test
          - sourceline: 'deb http://apt.llvm.org/precise/ llvm-toolchain-precise-3.8 main'
            key_url: 'http://apt.llvm.org/llvm-snapshot.gpg.key'
-      packages: ['clang-3.8' , 'zlib1g-dev', 'libbz2-dev', 'libsnappy-dev', 'curl', 'gflags']
+      packages: ['clang-3.8' , 'zlib1g-dev', 'libbz2-dev', 'libsnappy-dev', 'curl']
 env:
   # Run all tests before db_block_cache_test (db_test, db_test2)
   - JOB_NAME=unittests ROCKSDBTESTS_END=db_block_cache_test
