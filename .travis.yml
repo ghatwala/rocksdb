@@ -10,8 +10,10 @@ compiler:
 
 addons:
    apt:
-      sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-precise-3.6']
-      packages: ['clang-3.6' , 'zlib1g-dev', 'libbz2-dev', 'libsnappy-dev', 'curl', 'libgflags-dev']
+      sources:
+         - sourceline: 'deb http://apt.llvm.org/precise/ llvm-toolchain-precise-3.8 main'
+           key_url: 'http://apt.llvm.org/llvm-snapshot.gpg.key'
+      packages: ['clang-3.8' , 'zlib1g-dev', 'libbz2-dev', 'libsnappy-dev', 'curl', 'libgflags-dev']
 env:
   # Run all tests before db_block_cache_test (db_test, db_test2)
   - JOB_NAME=unittests ROCKSDBTESTS_END=db_block_cache_test
@@ -23,7 +25,7 @@ env:
   - JOB_NAME=lite_build
 
 before_script:
-  - if [[ "${TRAVIS_OS_NAME}" == 'linux' ]]; then CXX=clang++-3.6; fi
+  - if [[ "${TRAVIS_OS_NAME}" == 'linux' ]]; then CXX=clang++-3.8; fi
   # Limit the maximum number of open file descriptors to 8192
   - ulimit -n 8192 || true
 
