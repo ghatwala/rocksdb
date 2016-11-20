@@ -37,8 +37,16 @@ class RangeDelAggregator {
   //    (get/iterator), only the user snapshot is provided such that the seqnum
   //    space is divided into two stripes, where only tombstones in the older
   //    stripe are considered by ShouldDelete().
+  // Note this overload does not lazily initialize Rep.
   RangeDelAggregator(const InternalKeyComparator& icmp,
                      const std::vector<SequenceNumber>& snapshots);
+
+  // @param upper_bound Similar to snapshots above, except with a single
+  //    snapshot, which allows us to store the snapshot on the stack and defer
+  //    initialization of heap-allocating members (in Rep) until the first range
+  //    deletion is encountered.
+  RangeDelAggregator(const InternalKeyComparator& icmp,
+                     SequenceNumber upper_bound);
 
   // Returns whether the key should be deleted, which is the case when it is
   // covered by a range tombstone residing in the same snapshot stripe.
@@ -49,7 +57,6 @@ class RangeDelAggregator {
   // Adds tombstones to the tombstone aggregation structure maintained by this
   // object.
   // @return non-OK status if any of the tombstone keys are corrupted.
-  Status AddTombstones(ScopedArenaIterator input);
   Status AddTombstones(std::unique_ptr<InternalIterator> input);
 
   // Writes tombstones covering a range to a table builder.
@@ -75,7 +82,6 @@ class RangeDelAggregator {
   void AddToBuilder(TableBuilder* builder, const Slice* lower_bound,
                     const Slice* upper_bound, FileMetaData* meta,
                     bool bottommost_level = false);
-  Arena* GetArena() { return &arena_; }
   bool IsEmpty();
 
  private:
@@ -86,12 +92,20 @@ class RangeDelAggregator {
   // their seqnums are greater than the next smaller snapshot's seqnum.
   typedef std::map<SequenceNumber, TombstoneMap> StripeMap;
 
-  Status AddTombstones(InternalIterator* input, bool arena);
+  struct Rep {
+    StripeMap stripe_map_;
+    PinnedIteratorsManager pinned_iters_mgr_;
+  };
+  // Initializes rep_ lazily. This aggregator object is constructed for every
+  // read, so expensive members should only be created when necessary, i.e.,
+  // once the first range deletion is encountered.
+  void InitRep(const std::vector<SequenceNumber>& snapshots);
+
   TombstoneMap& GetTombstoneMap(SequenceNumber seq);
 
-  PinnedIteratorsManager pinned_iters_mgr_;
-  StripeMap stripe_map_;
+  SequenceNumber upper_bound_;
+  std::unique_ptr<Rep> rep_;
   const InternalKeyComparator icmp_;
-  Arena arena_;
 };
+
 }  // namespace rocksdb
