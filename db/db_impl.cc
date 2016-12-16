@@ -332,9 +332,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname)
       num_running_flushes_(0),
       bg_purge_scheduled_(0),
       disable_delete_obsolete_files_(0),
-      delete_obsolete_files_next_run_(
-          env_->NowMicros() +
-          immutable_db_options_.delete_obsolete_files_period_micros),
+      delete_obsolete_files_last_run_(env_->NowMicros()),
       last_stats_dump_time_microsec_(0),
       next_job_id_(1),
       has_unpersisted_data_(false),
@@ -743,7 +741,7 @@ void DBImpl::ScheduleBgLogWriterClose(JobContext* job_context) {
 // Otherwise, gets obsolete files from VersionSet.
 // no_full_scan = true -- never do the full scan using GetChildren()
 // force = false -- don't force the full scan, except every
-//  immutable_db_options_.delete_obsolete_files_period_micros
+//  mutable_db_options_.delete_obsolete_files_period_micros
 // force = true -- force the full scan
 void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
                                bool no_full_scan) {
@@ -760,15 +758,15 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
   if (no_full_scan) {
     doing_the_full_scan = false;
   } else if (force ||
-             immutable_db_options_.delete_obsolete_files_period_micros == 0) {
+             mutable_db_options_.delete_obsolete_files_period_micros == 0) {
     doing_the_full_scan = true;
   } else {
     const uint64_t now_micros = env_->NowMicros();
-    if (delete_obsolete_files_next_run_ < now_micros) {
+    if ((delete_obsolete_files_last_run_ +
+         mutable_db_options_.delete_obsolete_files_period_micros) <
+        now_micros) {
       doing_the_full_scan = true;
-      delete_obsolete_files_next_run_ =
-          now_micros +
-          immutable_db_options_.delete_obsolete_files_period_micros;
+      delete_obsolete_files_last_run_ = now_micros;
     }
   }
 
@@ -2939,6 +2937,12 @@ Status DBImpl::WaitForFlushMemTable(ColumnFamilyData* cfd) {
     if (shutting_down_.load(std::memory_order_acquire)) {
       return Status::ShutdownInProgress();
     }
+    if (cfd->IsDropped()) {
+      // FlushJob cannot flush a dropped CF, if we did not break here
+      // we will loop forever since cfd->imm()->NumNotFlushed() will never
+      // drop to zero
+      return Status::InvalidArgument("Cannot flush a dropped CF");
+    }
     bg_cv_.Wait();
   }
   if (!bg_error_.ok()) {
@@ -4739,7 +4743,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
     // for previous one. It might create a fairness issue that expiration
     // might happen for smaller writes but larger writes can go through.
     // Can optimize it if it is an issue.
-    status = DelayWrite(last_batch_group_size_);
+    status = DelayWrite(last_batch_group_size_, write_options);
     PERF_TIMER_START(write_pre_and_post_process_time);
   }
 
@@ -4749,6 +4753,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
   bool need_log_sync = !write_options.disableWAL && write_options.sync;
   bool need_log_dir_sync = need_log_sync && !log_dir_synced_;
 
+  bool logs_getting_synced = false;
   if (status.ok()) {
     if (need_log_sync) {
       while (logs_.front().getting_synced) {
@@ -4758,6 +4763,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
         assert(!log.getting_synced);
         log.getting_synced = true;
       }
+      logs_getting_synced = true;
     }
 
     // Add to log and apply to memtable.  We can release the lock
@@ -4977,7 +4983,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
   PERF_TIMER_START(write_pre_and_post_process_time);
 
   if (immutable_db_options_.paranoid_checks && !status.ok() &&
-      !w.CallbackFailed() && !status.IsBusy()) {
+      !w.CallbackFailed() && !status.IsBusy() && !status.IsIncomplete()) {
     mutex_.Lock();
     if (bg_error_.ok()) {
       bg_error_ = status;  // stop compaction & fail any further writes
@@ -4985,7 +4991,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
     mutex_.Unlock();
   }
 
-  if (need_log_sync) {
+  if (logs_getting_synced) {
     mutex_.Lock();
     MarkLogsSynced(logfile_number_, need_log_dir_sync, status);
     mutex_.Unlock();
@@ -5040,13 +5046,17 @@ uint64_t DBImpl::GetMaxTotalWalSize() const {
 
 // REQUIRES: mutex_ is held
 // REQUIRES: this thread is currently at the front of the writer queue
-Status DBImpl::DelayWrite(uint64_t num_bytes) {
+Status DBImpl::DelayWrite(uint64_t num_bytes,
+                          const WriteOptions& write_options) {
   uint64_t time_delayed = 0;
   bool delayed = false;
   {
     StopWatch sw(env_, stats_, WRITE_STALL, &time_delayed);
     auto delay = write_controller_.GetDelay(env_, num_bytes);
     if (delay > 0) {
+      if (write_options.no_slowdown) {
+        return Status::Incomplete();
+      }
       mutex_.Unlock();
       delayed = true;
       TEST_SYNC_POINT("DBImpl::DelayWrite:Sleep");
@@ -5056,11 +5066,15 @@ Status DBImpl::DelayWrite(uint64_t num_bytes) {
     }
 
     while (bg_error_.ok() && write_controller_.IsStopped()) {
+      if (write_options.no_slowdown) {
+        return Status::Incomplete();
+      }
       delayed = true;
       TEST_SYNC_POINT("DBImpl::DelayWrite:Wait");
       bg_cv_.Wait();
     }
   }
+  assert(!delayed || !write_options.no_slowdown);
   if (delayed) {
     default_cf_internal_stats_->AddDBStats(InternalStats::WRITE_STALL_MICROS,
                                            time_delayed);
@@ -6288,7 +6302,7 @@ Status DBImpl::RenameTempFileToOptionsFile(const std::string& file_name) {
 #endif  // !ROCKSDB_LITE
 }
 
-#if ROCKSDB_USING_THREAD_STATUS
+#ifdef ROCKSDB_USING_THREAD_STATUS
 
 void DBImpl::NewThreadStatusCfInfo(
     ColumnFamilyData* cfd) const {
@@ -6483,13 +6497,22 @@ Status DBImpl::IngestExternalFile(
 
     num_running_ingest_file_++;
 
+    // We cannot ingest a file into a dropped CF
+    if (cfd->IsDropped()) {
+      status = Status::InvalidArgument(
+          "Cannot ingest an external file into a dropped CF");
+    }
+
     // Figure out if we need to flush the memtable first
-    bool need_flush = false;
-    status = ingestion_job.NeedsFlush(&need_flush);
-    if (status.ok() && need_flush) {
-      mutex_.Unlock();
-      status = FlushMemTable(cfd, FlushOptions(), true /* writes_stopped */);
-      mutex_.Lock();
+    if (status.ok()) {
+      bool need_flush = false;
+      status = ingestion_job.NeedsFlush(&need_flush);
+
+      if (status.ok() && need_flush) {
+        mutex_.Unlock();
+        status = FlushMemTable(cfd, FlushOptions(), true /* writes_stopped */);
+        mutex_.Lock();
+      }
     }
 
     // Run the ingestion job
@@ -6531,7 +6554,33 @@ Status DBImpl::IngestExternalFile(
   // Cleanup
   ingestion_job.Cleanup(status);
 
+  if (status.ok()) {
+    NotifyOnExternalFileIngested(cfd, ingestion_job);
+  }
+
   return status;
+}
+
+void DBImpl::NotifyOnExternalFileIngested(
+    ColumnFamilyData* cfd, const ExternalSstFileIngestionJob& ingestion_job) {
+#ifndef ROCKSDB_LITE
+  if (immutable_db_options_.listeners.empty()) {
+    return;
+  }
+
+  for (const IngestedFileInfo& f : ingestion_job.files_to_ingest()) {
+    ExternalFileIngestionInfo info;
+    info.cf_name = cfd->GetName();
+    info.external_file_path = f.external_file_path;
+    info.internal_file_path = f.internal_file_path;
+    info.global_seqno = f.assigned_seqno;
+    info.table_properties = f.table_properties;
+    for (auto listener : immutable_db_options_.listeners) {
+      listener->OnExternalFileIngested(this, info);
+    }
+  }
+
+#endif
 }
 
 void DBImpl::WaitForIngestFile() {

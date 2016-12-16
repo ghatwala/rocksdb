@@ -157,6 +157,7 @@ class PosixEnv : public Env {
       *result = nullptr;
       return IOError(fname, errno);
     } else if (options.use_direct_reads && !options.use_mmap_writes) {
+      fclose(f);
 #ifdef OS_MACOSX
       int flags = O_RDONLY;
 #else
@@ -215,6 +216,7 @@ class PosixEnv : public Env {
       }
       close(fd);
     } else if (options.use_direct_reads) {
+      close(fd);
 #ifdef OS_MACOSX
       int flags = O_RDONLY;
 #else
@@ -269,6 +271,7 @@ class PosixEnv : public Env {
       if (options.use_mmap_writes && !forceMmapOff) {
         result->reset(new PosixMmapFile(fname, fd, page_size_, options));
       } else if (options.use_direct_writes) {
+        close(fd);
 #ifdef OS_MACOSX
         int flags = O_WRONLY | O_APPEND | O_TRUNC | O_CREAT;
 #else
@@ -415,7 +418,14 @@ class PosixEnv : public Env {
     result->clear();
     DIR* d = opendir(dir.c_str());
     if (d == nullptr) {
-      return IOError(dir, errno);
+      switch (errno) {
+        case EACCES:
+        case ENOENT:
+        case ENOTDIR:
+          return Status::NotFound();
+        default:
+          return IOError(dir, errno);
+      }
     }
     struct dirent* entry;
     while ((entry = readdir(d)) != nullptr) {

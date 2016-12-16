@@ -47,7 +47,7 @@ else()
     # FreeBSD has jemaloc as default malloc
     add_definitions(-DROCKSDB_JEMALLOC)
     set(WITH_JEMALLOC ON)
-  endif()  
+  endif()
   option(WITH_SNAPPY "build with SNAPPY" OFF)
   if(WITH_SNAPPY)
     find_package(snappy REQUIRED)
@@ -400,7 +400,6 @@ set(SOURCES
         utilities/document/json_document_builder.cc
         utilities/env_mirror.cc
         utilities/env_registry.cc
-        utilities/flashcache/flashcache.cc
         utilities/geodb/geodb_impl.cc
         utilities/leveldb_options/leveldb_options.cc
         utilities/lua/rocks_lua_compaction_filter.cc
@@ -513,6 +512,7 @@ set(TESTS
         db/db_bloom_filter_test.cc
         db/db_flush_test.cc
         db/db_iterator_test.cc
+        db/db_range_del_test.cc
         db/db_sst_test.cc
         db/external_sst_file_test.cc
         db/db_universal_compaction_test.cc

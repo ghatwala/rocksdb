@@ -48,7 +48,6 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/utilities/env_registry.h"
-#include "rocksdb/utilities/flashcache.h"
 #include "rocksdb/utilities/optimistic_transaction_db.h"
 #include "rocksdb/utilities/options_util.h"
 #include "rocksdb/utilities/sim_cache.h"
@@ -61,6 +60,7 @@
 #include "util/mutexlock.h"
 #include "util/random.h"
 #include "util/statistics.h"
+#include "util/stderr_logger.h"
 #include "util/string_util.h"
 #include "util/testutil.h"
 #include "util/transaction_test_util.h"
@@ -419,8 +419,8 @@ DEFINE_int32(random_access_max_buffer_size, 1024 * 1024,
 DEFINE_int32(writable_file_max_buffer_size, 1024 * 1024,
              "Maximum write buffer for Writable File");
 
-DEFINE_int32(skip_table_builder_flush, false, "Skip flushing block in "
-             "table builder ");
+DEFINE_bool(skip_table_builder_flush, false, "Skip flushing block in "
+            "table builder ");
 
 DEFINE_int32(bloom_bits, -1, "Bloom filter bits per key. Negative means"
              " use default settings.");
@@ -546,6 +546,9 @@ DEFINE_int64(max_num_range_tombstones, 0,
              "Maximum number of range tombstones "
              "to insert.");
 
+DEFINE_bool(expand_range_tombstones, false,
+            "Expand range tombstone into sequential regular tombstones.");
+
 #ifndef ROCKSDB_LITE
 DEFINE_bool(optimistic_transaction_db, false,
             "Open a OptimisticTransactionDB instance. "
@@ -583,14 +586,15 @@ DEFINE_string(
     "\t--row_cache_size\n"
     "\t--row_cache_numshardbits\n"
     "\t--enable_io_prio\n"
-    "\t--disable_flashcache_for_background_threads\n"
-    "\t--flashcache_dev\n"
     "\t--dump_malloc_stats\n"
     "\t--num_multi_db\n");
 #endif  // ROCKSDB_LITE
 
 DEFINE_bool(report_bg_io_stats, false,
             "Measure times spents on I/Os while in compactions. ");
+
+DEFINE_bool(use_stderr_info_logger, false,
+            "Write info logs to stderr instead of to LOG file. ");
 
 DEFINE_bool(use_blob_db, false, "Whether to use BlobDB. ");
 
@@ -782,11 +786,6 @@ DEFINE_string(compaction_fadvice, "NORMAL",
 static auto FLAGS_compaction_fadvice_e =
   rocksdb::Options().access_hint_on_compaction_start;
 
-DEFINE_bool(disable_flashcache_for_background_threads, false,
-            "Disable flashcache for background threads");
-
-DEFINE_string(flashcache_dev, "", "Path to flashcache device");
-
 DEFINE_bool(use_tailing_iterator, false,
             "Use tailing iterator to access a series of keys instead of get");
 
@@ -844,6 +843,9 @@ DEFINE_int32(prefix_size, 0, "control the prefix size for HashSkipList and "
 DEFINE_int64(keys_per_prefix, 0, "control average number of keys generated "
              "per prefix, 0 means no special handling of the prefix, "
              "i.e. use the prefix comes with the generated random number.");
+DEFINE_int32(memtable_insert_with_hint_prefix_size, 0,
+             "If non-zero, enable "
+             "memtable insert with hint with the given prefix size.");
 DEFINE_bool(enable_io_prio, false, "Lower the background flush/compaction "
             "threads' IO priority");
 DEFINE_bool(identity_as_first_hash, false, "the first hash function of cuckoo "
@@ -1755,7 +1757,6 @@ class Benchmark {
   int64_t readwrites_;
   int64_t merge_keys_;
   bool report_file_operations_;
-  int cachedev_fd_;
 
   bool SanityCheck() {
     if (FLAGS_compression_ratio > 1) {
@@ -2011,8 +2012,7 @@ class Benchmark {
                 ? FLAGS_num
                 : ((FLAGS_writes > FLAGS_reads) ? FLAGS_writes : FLAGS_reads)),
         merge_keys_(FLAGS_merge_keys < 0 ? FLAGS_num : FLAGS_merge_keys),
-        report_file_operations_(FLAGS_report_file_operations),
-        cachedev_fd_(-1) {
+        report_file_operations_(FLAGS_report_file_operations) {
     // use simcache instead of cache
     if (FLAGS_simcache_size >= 0) {
       if (FLAGS_cache_numshardbits >= 1) {
@@ -2070,11 +2070,6 @@ class Benchmark {
     if (cache_.get() != nullptr) {
       // this will leak, but we're shutting down so nobody cares
       cache_->DisownData();
-    }
-    if (FLAGS_disable_flashcache_for_background_threads && cachedev_fd_ != -1) {
-      // Dtor for thiis env should run before cachedev_fd_ is closed
-      flashcache_aware_env_ = nullptr;
-      close(cachedev_fd_);
     }
   }
 
@@ -2434,7 +2429,6 @@ class Benchmark {
   }
 
  private:
-  std::unique_ptr<Env> flashcache_aware_env_;
   std::shared_ptr<TimestampEmulator> timestamp_emulator_;
 
   struct ThreadArg {
@@ -2621,7 +2615,7 @@ class Benchmark {
     if (!ok) {
       thread->stats.AddMessage("(compression failure)");
     } else {
-      char buf[100];
+      char buf[340];
       snprintf(buf, sizeof(buf), "(output: %.1f%%)",
                (produced * 100.0) / bytes);
       thread->stats.AddMessage(buf);
@@ -2755,8 +2749,16 @@ class Benchmark {
         exit(1);
       }
     }
+    if (FLAGS_use_stderr_info_logger) {
+      options.info_log.reset(new StderrLogger());
+    }
     options.memtable_huge_page_size = FLAGS_memtable_use_huge_page ? 2048 : 0;
     options.memtable_prefix_bloom_size_ratio = FLAGS_memtable_bloom_size_ratio;
+    if (FLAGS_memtable_insert_with_hint_prefix_size > 0) {
+      options.memtable_insert_with_hint_prefix_extractor.reset(
+          NewCappedPrefixTransform(
+              FLAGS_memtable_insert_with_hint_prefix_size));
+    }
     options.bloom_locality = FLAGS_bloom_locality;
     options.max_file_opening_threads = FLAGS_file_opening_threads;
     options.new_table_reader_for_compaction_inputs =
@@ -3017,23 +3019,7 @@ class Benchmark {
       FLAGS_env->LowerThreadPoolIOPriority(Env::LOW);
       FLAGS_env->LowerThreadPoolIOPriority(Env::HIGH);
     }
-    if (FLAGS_disable_flashcache_for_background_threads && cachedev_fd_ == -1) {
-      // Avoid creating the env twice when an use_existing_db is true
-      cachedev_fd_ = open(FLAGS_flashcache_dev.c_str(), O_RDONLY);
-      if (cachedev_fd_ < 0) {
-        fprintf(stderr, "Open flash device failed\n");
-        exit(1);
-      }
-      flashcache_aware_env_ = NewFlashcacheAwareEnv(FLAGS_env, cachedev_fd_);
-      if (flashcache_aware_env_.get() == nullptr) {
-        fprintf(stderr, "Failed to open flashcache device at %s\n",
-                FLAGS_flashcache_dev.c_str());
-        std::abort();
-      }
-      options.env = flashcache_aware_env_.get();
-    } else {
-      options.env = FLAGS_env;
-    }
+    options.env = FLAGS_env;
 
     if (FLAGS_num_multi_db <= 1) {
       OpenDb(options, FLAGS_db, &db_);
@@ -3256,6 +3242,14 @@ class Benchmark {
     Slice begin_key = AllocateKey(&begin_key_guard);
     std::unique_ptr<const char[]> end_key_guard;
     Slice end_key = AllocateKey(&end_key_guard);
+    std::vector<std::unique_ptr<const char[]>> expanded_key_guards;
+    std::vector<Slice> expanded_keys;
+    if (FLAGS_expand_range_tombstones) {
+      expanded_key_guards.resize(range_tombstone_width_);
+      for (auto& expanded_key_guard : expanded_key_guards) {
+        expanded_keys.emplace_back(AllocateKey(&expanded_key_guard));
+      }
+    }
 
     int64_t stage = 0;
     int64_t num_written = 0;
@@ -3307,18 +3301,35 @@ class Benchmark {
                 max_num_range_tombstones_ &&
             num_written % writes_per_range_tombstone_ == 0) {
           int64_t begin_num = key_gens[id]->Next();
-          GenerateKeyFromInt(begin_num, FLAGS_num, &begin_key);
-          GenerateKeyFromInt(begin_num + range_tombstone_width_, FLAGS_num,
-                             &end_key);
-          if (FLAGS_use_blob_db) {
-            s = db_with_cfh->db->DeleteRange(
-                write_options_, db_with_cfh->db->DefaultColumnFamily(),
-                begin_key, end_key);
-          } else if (FLAGS_num_column_families <= 1) {
-            batch.DeleteRange(begin_key, end_key);
+          if (FLAGS_expand_range_tombstones) {
+            for (int64_t offset = 0; offset < range_tombstone_width_;
+                 ++offset) {
+              GenerateKeyFromInt(begin_num + offset, FLAGS_num,
+                                 &expanded_keys[offset]);
+              if (FLAGS_use_blob_db) {
+                s = db_with_cfh->db->Delete(write_options_,
+                                            expanded_keys[offset]);
+              } else if (FLAGS_num_column_families <= 1) {
+                batch.Delete(expanded_keys[offset]);
+              } else {
+                batch.Delete(db_with_cfh->GetCfh(rand_num),
+                             expanded_keys[offset]);
+              }
+            }
           } else {
-            batch.DeleteRange(db_with_cfh->GetCfh(rand_num), begin_key,
-                              end_key);
+            GenerateKeyFromInt(begin_num, FLAGS_num, &begin_key);
+            GenerateKeyFromInt(begin_num + range_tombstone_width_, FLAGS_num,
+                               &end_key);
+            if (FLAGS_use_blob_db) {
+              s = db_with_cfh->db->DeleteRange(
+                  write_options_, db_with_cfh->db->DefaultColumnFamily(),
+                  begin_key, end_key);
+            } else if (FLAGS_num_column_families <= 1) {
+              batch.DeleteRange(begin_key, end_key);
+            } else {
+              batch.DeleteRange(db_with_cfh->GetCfh(rand_num), begin_key,
+                                end_key);
+            }
           }
         }
       }
@@ -3621,6 +3632,9 @@ class Benchmark {
     }
     delete iter;
     thread->stats.AddBytes(bytes);
+    if (FLAGS_perf_level > rocksdb::PerfLevel::kDisable) {
+      thread->stats.AddMessage(perf_context.ToString());
+    }
   }
 
   void ReadReverse(ThreadState* thread) {

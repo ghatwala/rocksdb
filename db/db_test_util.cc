@@ -19,7 +19,7 @@ SpecialEnv::SpecialEnv(Env* base)
       sleep_counter_(this),
       addon_time_(0),
       time_elapse_only_sleep_(false),
-      no_sleep_(false) {
+      no_slowdown_(false) {
   delay_sstable_sync_.store(false, std::memory_order_release);
   drop_writes_.store(false, std::memory_order_release);
   no_space_.store(false, std::memory_order_release);
@@ -307,6 +307,7 @@ Options DBTestBase::CurrentOptions(
       break;
     case kManifestFileSize:
       options.max_manifest_file_size = 50;  // 50 bytes
+      break;
     case kPerfOptions:
       options.soft_rate_limit = 2.0;
       options.delayed_write_rate = 8 * 1024 * 1024;
@@ -590,8 +591,8 @@ std::string DBTestBase::Contents(int cf) {
 std::string DBTestBase::AllEntriesFor(const Slice& user_key, int cf) {
   Arena arena;
   auto options = CurrentOptions();
-  RangeDelAggregator range_del_agg(InternalKeyComparator(options.comparator),
-                                   {} /* snapshots */);
+  InternalKeyComparator icmp(options.comparator);
+  RangeDelAggregator range_del_agg(icmp, {} /* snapshots */);
   ScopedArenaIterator iter;
   if (cf == 0) {
     iter.set(dbfull()->NewInternalIterator(&arena, &range_del_agg));
@@ -999,8 +1000,8 @@ void DBTestBase::validateNumberOfEntries(int numValues, int cf) {
   ScopedArenaIterator iter;
   Arena arena;
   auto options = CurrentOptions();
-  RangeDelAggregator range_del_agg(InternalKeyComparator(options.comparator),
-                                   {} /* snapshots */);
+  InternalKeyComparator icmp(options.comparator);
+  RangeDelAggregator range_del_agg(icmp, {} /* snapshots */);
   if (cf != 0) {
     iter.set(
         dbfull()->NewInternalIterator(&arena, &range_del_agg, handles_[cf]));

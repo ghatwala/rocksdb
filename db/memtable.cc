@@ -75,6 +75,7 @@ MemTable::MemTable(const InternalKeyComparator& cmp,
       range_del_table_(SkipListFactory().CreateMemTableRep(
           comparator_, &allocator_, nullptr /* transform */,
           ioptions.info_log)),
+      is_range_del_table_empty_(true),
       data_size_(0),
       num_entries_(0),
       num_deletes_(0),
@@ -321,11 +322,13 @@ class MemTableIterator : public InternalIterator {
     valid_ = iter_->Valid();
   }
   virtual void Next() override {
+    PERF_COUNTER_ADD(next_on_memtable_count, 1);
     assert(Valid());
     iter_->Next();
     valid_ = iter_->Valid();
   }
   virtual void Prev() override {
+    PERF_COUNTER_ADD(prev_on_memtable_count, 1);
     assert(Valid());
     iter_->Prev();
     valid_ = iter_->Valid();
@@ -375,8 +378,8 @@ InternalIterator* MemTable::NewIterator(const ReadOptions& read_options,
 
 InternalIterator* MemTable::NewRangeTombstoneIterator(
     const ReadOptions& read_options) {
-  if (read_options.ignore_range_deletions) {
-    return NewEmptyInternalIterator();
+  if (read_options.ignore_range_deletions || is_range_del_table_empty_) {
+    return nullptr;
   }
   return new MemTableIterator(*this, read_options, nullptr /* arena */,
                               true /* use_range_del_table */);
@@ -440,16 +443,12 @@ void MemTable::Add(SequenceNumber s, ValueType type,
   assert((unsigned)(p + val_size - buf) == (unsigned)encoded_len);
   if (!allow_concurrent) {
     // Extract prefix for insert with hint.
-    Slice prefix;
-    if (insert_with_hint_prefix_extractor_ != nullptr) {
-      if (insert_with_hint_prefix_extractor_->InDomain(key_slice)) {
-        prefix = insert_with_hint_prefix_extractor_->Transform(key_slice);
-      }
-    }
-    if (prefix.empty()) {
-      table->Insert(handle);
-    } else {
+    if (insert_with_hint_prefix_extractor_ != nullptr &&
+        insert_with_hint_prefix_extractor_->InDomain(key_slice)) {
+      Slice prefix = insert_with_hint_prefix_extractor_->Transform(key_slice);
       table->InsertWithHint(handle, &insert_hints_[prefix]);
+    } else {
+      table->Insert(handle);
     }
 
     // this is a bit ugly, but is the way to avoid locked instructions
@@ -507,6 +506,9 @@ void MemTable::Add(SequenceNumber s, ValueType type,
         (cur_earliest_seqno == kMaxSequenceNumber || s < cur_earliest_seqno) &&
         !first_seqno_.compare_exchange_weak(cur_earliest_seqno, s)) {
     }
+  }
+  if (is_range_del_table_empty_ && type == kTypeRangeDeletion) {
+    is_range_del_table_empty_ = false;
   }
 }
 
@@ -733,6 +735,7 @@ void MemTable::Update(SequenceNumber seq,
             return;
           }
         }
+	// fallthrough
         default:
           // If the latest value is kTypeDeletion, kTypeMerge or kTypeLogData
           // we don't have enough space for update inplace

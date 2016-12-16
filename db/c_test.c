@@ -288,6 +288,7 @@ int main(int argc, char** argv) {
   rocksdb_cache_t* cache;
   rocksdb_env_t* env;
   rocksdb_options_t* options;
+  rocksdb_compactoptions_t* coptions;
   rocksdb_block_based_table_options_t* table_options;
   rocksdb_readoptions_t* roptions;
   rocksdb_writeoptions_t* woptions;
@@ -323,6 +324,7 @@ int main(int argc, char** argv) {
   rocksdb_options_set_write_buffer_size(options, 100000);
   rocksdb_options_set_paranoid_checks(options, 1);
   rocksdb_options_set_max_open_files(options, 10);
+  rocksdb_options_set_base_background_compactions(options, 1);
   table_options = rocksdb_block_based_options_create();
   rocksdb_block_based_options_set_block_cache(table_options, cache);
   rocksdb_options_set_block_based_table_factory(options, table_options);
@@ -342,6 +344,9 @@ int main(int argc, char** argv) {
 
   woptions = rocksdb_writeoptions_create();
   rocksdb_writeoptions_set_sync(woptions, 1);
+
+  coptions = rocksdb_compactoptions_create();
+  rocksdb_compactoptions_set_exclusive_manual_compaction(coptions, 1);
 
   StartPhase("destroy");
   rocksdb_destroy_db(options, dbname, &err);
@@ -424,6 +429,14 @@ int main(int argc, char** argv) {
   rocksdb_compact_range(db, "a", 1, "z", 1);
   CheckGet(db, roptions, "foo", "hello");
 
+  StartPhase("compactallopt");
+  rocksdb_compact_range_opt(db, coptions, NULL, 0, NULL, 0);
+  CheckGet(db, roptions, "foo", "hello");
+
+  StartPhase("compactrangeopt");
+  rocksdb_compact_range_opt(db, coptions, "a", 1, "z", 1);
+  CheckGet(db, roptions, "foo", "hello");
+
   StartPhase("writebatch");
   {
     rocksdb_writebatch_t* wb = rocksdb_writebatch_create();
@@ -440,6 +453,24 @@ int main(int argc, char** argv) {
     int pos = 0;
     rocksdb_writebatch_iterate(wb, &pos, CheckPut, CheckDel);
     CheckCondition(pos == 3);
+    rocksdb_writebatch_clear(wb);
+    rocksdb_writebatch_put(wb, "bar", 3, "b", 1);
+    rocksdb_writebatch_put(wb, "bay", 3, "d", 1);
+    rocksdb_writebatch_delete_range(wb, "bar", 3, "bay", 3);
+    rocksdb_write(db, woptions, wb, &err);
+    CheckNoError(err);
+    CheckGet(db, roptions, "bar", NULL);
+    CheckGet(db, roptions, "bay", "d");
+    rocksdb_writebatch_clear(wb);
+    const char* start_list[1] = {"bay"};
+    const size_t start_sizes[1] = {3};
+    const char* end_list[1] = {"baz"};
+    const size_t end_sizes[1] = {3};
+    rocksdb_writebatch_delete_rangev(wb, 1, start_list, start_sizes, end_list,
+                                     end_sizes);
+    rocksdb_write(db, woptions, wb, &err);
+    CheckNoError(err);
+    CheckGet(db, roptions, "bay", NULL);
     rocksdb_writebatch_destroy(wb);
   }
 
@@ -1039,6 +1070,7 @@ int main(int argc, char** argv) {
   rocksdb_block_based_options_destroy(table_options);
   rocksdb_readoptions_destroy(roptions);
   rocksdb_writeoptions_destroy(woptions);
+  rocksdb_compactoptions_destroy(coptions);
   rocksdb_cache_destroy(cache);
   rocksdb_comparator_destroy(cmp);
   rocksdb_env_destroy(env);
