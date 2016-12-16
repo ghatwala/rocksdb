@@ -27,6 +27,14 @@ env:
   # Build ROCKSDB_LITE
   - JOB_NAME=lite_build
 
+matrix:
+  exclude:
+  - os: osx
+    compiler: gcc
+  - os: linux
+    compiler: gcc
+    env: JOB_NAME=unittests
+
 before_script:
   - if [[ "${TRAVIS_OS_NAME}" == 'linux' && "${CXX}" == 'clang++' ]]; then CXX=clang++-3.6; fi
   - if [[ "${TRAVIS_OS_NAME}" == 'linux' && "${CXX}" == 'g++' && "${JOB_NAME}" == 'java_test' ]]; then CXX=g++-6; fi
