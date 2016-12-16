@@ -15,7 +15,7 @@ cache:
 
 addons:
    apt:
-      sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-precise-3.6']
+      sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-3.6', 'llvm-toolchain-trusty-3.8']
       packages: ['clang-3.6' , 'g++-6', 'zlib1g-dev', 'libbz2-dev', 'libsnappy-dev', 'curl', 'libgflags-dev']
 env:
   # Run all tests before db_block_cache_test (db_test, db_test2)
