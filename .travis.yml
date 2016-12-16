@@ -9,6 +9,9 @@ compiler:
   - gcc
 jdk:
   - oraclejdk7
+cache:
+  - ccache
+  - apt
 
 addons:
    apt:
