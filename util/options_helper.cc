@@ -71,10 +71,10 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
   options.WAL_size_limit_MB = immutable_db_options.wal_size_limit_mb;
   options.manifest_preallocation_size =
       immutable_db_options.manifest_preallocation_size;
-  options.allow_os_buffer = immutable_db_options.allow_os_buffer;
   options.allow_mmap_reads = immutable_db_options.allow_mmap_reads;
   options.allow_mmap_writes = immutable_db_options.allow_mmap_writes;
   options.use_direct_reads = immutable_db_options.use_direct_reads;
+  options.use_direct_writes = immutable_db_options.use_direct_writes;
   options.allow_fallocate = immutable_db_options.allow_fallocate;
   options.is_fd_close_on_exec = immutable_db_options.is_fd_close_on_exec;
   options.stats_dump_period_sec = immutable_db_options.stats_dump_period_sec;
@@ -1078,6 +1078,17 @@ Status GetStringFromCompressionType(std::string* compression_str,
   } else {
     return Status::InvalidArgument("Invalid compression types");
   }
+}
+
+std::vector<CompressionType> GetSupportedCompressions() {
+  std::vector<CompressionType> supported_compressions;
+  for (const auto& comp_to_name : compression_type_string_map) {
+    CompressionType t = comp_to_name.second;
+    if (t != kDisableCompressionOption && CompressionTypeSupported(t)) {
+      supported_compressions.push_back(t);
+    }
+  }
+  return supported_compressions;
 }
 
 bool SerializeSingleBlockBasedTableOption(

@@ -657,11 +657,13 @@ extern ROCKSDB_LIBRARY_API void rocksdb_options_set_manifest_preallocation_size(
 extern ROCKSDB_LIBRARY_API void
 rocksdb_options_set_purge_redundant_kvs_while_flush(rocksdb_options_t*,
                                                     unsigned char);
-extern ROCKSDB_LIBRARY_API void rocksdb_options_set_allow_os_buffer(
-    rocksdb_options_t*, unsigned char);
 extern ROCKSDB_LIBRARY_API void rocksdb_options_set_allow_mmap_reads(
     rocksdb_options_t*, unsigned char);
 extern ROCKSDB_LIBRARY_API void rocksdb_options_set_allow_mmap_writes(
+    rocksdb_options_t*, unsigned char);
+extern ROCKSDB_LIBRARY_API void rocksdb_options_set_use_direct_reads(
+    rocksdb_options_t*, unsigned char);
+extern ROCKSDB_LIBRARY_API void rocksdb_options_set_use_direct_writes(
     rocksdb_options_t*, unsigned char);
 extern ROCKSDB_LIBRARY_API void rocksdb_options_set_is_fd_close_on_exec(
     rocksdb_options_t*, unsigned char);
@@ -875,6 +877,10 @@ extern ROCKSDB_LIBRARY_API void rocksdb_readoptions_set_tailing(
     rocksdb_readoptions_t*, unsigned char);
 extern ROCKSDB_LIBRARY_API void rocksdb_readoptions_set_readahead_size(
     rocksdb_readoptions_t*, size_t);
+extern ROCKSDB_LIBRARY_API void rocksdb_readoptions_set_pin_data(
+    rocksdb_readoptions_t*, unsigned char);
+extern ROCKSDB_LIBRARY_API void rocksdb_readoptions_set_total_order_seek(
+    rocksdb_readoptions_t*, unsigned char);
 
 /* Write options */
 
@@ -917,6 +923,10 @@ extern ROCKSDB_LIBRARY_API rocksdb_cache_t* rocksdb_cache_create_lru(
 extern ROCKSDB_LIBRARY_API void rocksdb_cache_destroy(rocksdb_cache_t* cache);
 extern ROCKSDB_LIBRARY_API void rocksdb_cache_set_capacity(
     rocksdb_cache_t* cache, size_t capacity);
+extern ROCKSDB_LIBRARY_API size_t
+rocksdb_cache_get_usage(rocksdb_cache_t* cache);
+extern ROCKSDB_LIBRARY_API size_t
+rocksdb_cache_get_pinned_usage(rocksdb_cache_t* cache);
 
 /* Env */
 
