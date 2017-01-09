@@ -853,9 +853,6 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       }
     }
 
-    Status input_status = input->status();
-    c_iter->Next();
-
     // Close output file if it is big enough
     // TODO(aekmekji): determine if file should be closed earlier than this
     // during subcompactions (i.e. if output size, estimated by input size, is
@@ -864,6 +861,9 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     if (sub_compact->compaction->output_level() != 0 &&
         sub_compact->current_output_file_size >=
             sub_compact->compaction->max_output_file_size()) {
+      Status input_status = input->status();
+      c_iter->Next();
+
       const Slice* next_key = nullptr;
       if (c_iter->Valid()) {
         next_key = &c_iter->key();
@@ -879,6 +879,8 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
         // files.
         sub_compact->compression_dict = std::move(compression_dict);
       }
+    } else {
+      c_iter->Next();
     }
   }
 
@@ -1084,6 +1086,7 @@ Status CompactionJob::FinishCompactionOutputFile(
       event_logger_, cfd->ioptions()->listeners, dbname_, cfd->GetName(), fname,
       job_id_, meta->fd, tp, TableFileCreationReason::kCompaction, s);
 
+#ifndef ROCKSDB_LITE
   // Report new file to SstFileManagerImpl
   auto sfm =
       static_cast<SstFileManagerImpl*>(db_options_.sst_file_manager.get());
@@ -1101,6 +1104,7 @@ Status CompactionJob::FinishCompactionOutputFile(
       }
     }
   }
+#endif
 
   sub_compact->builder.reset();
   sub_compact->current_output_file_size = 0;
