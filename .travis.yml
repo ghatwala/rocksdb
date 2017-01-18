@@ -36,16 +36,13 @@ matrix:
     compiler: gcc
   - os: osx
     compiler: clang
-    env:
-      - JOB_NAME=lite_build COMPILER=clang++-3.9
+    env: COMPILER=clang++-3.9
   - os: osx
     compiler: clang
-    env:
-      - JOB_NAME=lite_build COMPILER=clang++-4.0
+    env: COMPILER=clang++-4.0
   - os: linux
     compiler: gcc
-    env:
-      - JOB_NAME=lite_build COMPILER=clang++-4.0
+    env: COMPILER=clang++-4.0
 
 before_script:
   - if [[ "${TRAVIS_OS_NAME}" == 'linux' && -n "${COMPILER}" ]]; then CXX=${COMPILER}; fi
