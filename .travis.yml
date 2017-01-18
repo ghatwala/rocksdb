@@ -15,17 +15,20 @@ cache:
 
 addons:
    apt:
-      sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-precise-3.6']
-      packages: ['clang-3.6' , 'g++-6', 'zlib1g-dev', 'libbz2-dev', 'libsnappy-dev', 'curl', 'libgflags-dev']
+      sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty', 'llvm-toolchain-trusty-3.9', 'llvm-toolchain-trusty-4.0']
+      packages: ['clang-3.6', 'clang-3.9','clang-4.0', 'g++-6', 'zlib1g-dev', 'libbz2-dev', 'libsnappy-dev', 'curl', 'libgflags-dev']
 env:
   # Run all tests before db_block_cache_test (db_test, db_test2)
   - JOB_NAME=unittests ROCKSDBTESTS_END=db_block_cache_test
-  # Run all tests starting from db_block_cache_test (db_block_cache_test, db_iter_test, ...)
-  - JOB_NAME=unittests ROCKSDBTESTS_START=db_block_cache_test
+  # Run all tests starting from db_block_cache_test but can't do them all due to travis space constraints
+  - JOB_NAME=unittests ROCKSDBTESTS_START=db_block_cache_test ROCKSDBTESTS_END=db_table_properties_test
+  - JOB_NAME=unittests ROCKSDBTESTS_START=db_table_properties_test
   # Run java tests
   - JOB_NAME=java_test
   # Build ROCKSDB_LITE
-  - JOB_NAME=lite_build
+  - JOB_NAME=lite_build COMPILER=clang++-3.6
+  - JOB_NAME=lite_build COMPILER=clang++-3.9
+  - JOB_NAME=lite_build COMPILER=clang++-4.0
 
 matrix:
   exclude:
@@ -33,8 +36,8 @@ matrix:
     compiler: gcc
 
 before_script:
-  - if [[ "${TRAVIS_OS_NAME}" == 'linux' && "${CXX}" == 'clang++' ]]; then CXX=clang++-3.6; fi
-  # test one linux g++ build with g++-6
+  - if [[ "${TRAVIS_OS_NAME}" == 'linux' && -n "${COMPILER}" ]]; then CXX=${COMPILER}; fi
+  # test linux g++ unittests build with g++-6
   - if [[ "${TRAVIS_OS_NAME}" == 'linux' && "${CXX}" == 'g++' && "${JOB_NAME}" == 'unittests' ]]; then CXX=g++-6; fi
   # Limit the maximum number of open file descriptors to 8192
   - ulimit -n 8192 || true
