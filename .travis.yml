@@ -21,8 +21,8 @@ env:
   # Run all tests before db_block_cache_test (db_test, db_test2)
   - JOB_NAME=unittests ROCKSDBTESTS_END=db_block_cache_test
   # Run all tests starting from db_block_cache_test but can't do them all due to travis space constraints
-  - JOB_NAME=unittests ROCKSDBTESTS_START=db_block_cache_test ROCKSDBTESTS_END=db_table_properties_test
-  - JOB_NAME=unittests ROCKSDBTESTS_START=db_table_properties_test
+  - JOB_NAME=unittests ROCKSDBTESTS_START=db_block_cache_test ROCKSDBTESTS_END=redis_test
+  - JOB_NAME=unittests ROCKSDBTESTS_START=redis_test
   # Run java tests
   - JOB_NAME=java_test
   # Build ROCKSDB_LITE
@@ -34,11 +34,23 @@ matrix:
   exclude:
   - os: osx
     compiler: gcc
+  - os: osx
+    compiler: clang
+    env:
+      - JOB_NAME=lite_build COMPILER=clang++-3.9
+  - os: osx
+    compiler: clang
+    env:
+      - JOB_NAME=lite_build COMPILER=clang++-4.0
+  - os: linux
+    compiler: gcc
+    env:
+      - JOB_NAME=lite_build COMPILER=clang++-4.0
 
 before_script:
   - if [[ "${TRAVIS_OS_NAME}" == 'linux' && -n "${COMPILER}" ]]; then CXX=${COMPILER}; fi
   # test linux g++ unittests build with g++-6
-  - if [[ "${TRAVIS_OS_NAME}" == 'linux' && "${CXX}" == 'g++' && "${JOB_NAME}" == 'unittests' ]]; then CXX=g++-6; fi
+  - if [[ "${TRAVIS_OS_NAME}" == 'linux' && "${CXX}" == 'g++' && ( "${JOB_NAME}" == 'unittests' && "${ROCKSDBTESTS_END}" == db_block_cache_test || "${COMPILER}" == clang++-3.9 ) ]]; then CXX=g++-6; fi
   # Limit the maximum number of open file descriptors to 8192
   - ulimit -n 8192 || true
 
