@@ -1366,9 +1366,10 @@ JAVA_INCLUDE = -I$(JAVA_HOME)/include/ -I$(JAVA_HOME)/include/linux
 ifeq ($(PLATFORM), OS_SOLARIS)
 	ARCH := $(shell isainfo -b)
 else
-	ARCH := $(shell getconf LONG_BIT)
+#	ARCH := $(shell getconf LONG_BIT)
+        ARCH := $(shell uname -m)
 endif
-ROCKSDBJNILIB = librocksdbjni-linux$(ARCH).so
+ROCKSDBJNILIB = librocksdbjni-linux-$(ARCH).so
 ROCKSDB_JAR = rocksdbjni-$(ROCKSDB_MAJOR).$(ROCKSDB_MINOR).$(ROCKSDB_PATCH)-linux$(ARCH).jar
 ROCKSDB_JAR_ALL = rocksdbjni-$(ROCKSDB_MAJOR).$(ROCKSDB_MINOR).$(ROCKSDB_PATCH).jar
 ROCKSDB_JAVADOCS_JAR = rocksdbjni-$(ROCKSDB_MAJOR).$(ROCKSDB_MINOR).$(ROCKSDB_PATCH)-javadoc.jar
