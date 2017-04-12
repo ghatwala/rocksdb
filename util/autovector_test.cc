@@ -54,7 +54,8 @@ TEST_F(AutoVectorTest, PushBackAndPopBack) {
     vec.pop_back();
     // will always be in heap
     AssertAutoVectorOnlyInStack(&vec, false);
-    ASSERT_EQ(--size, vec.size());
+    --size;
+    ASSERT_EQ(size, vec.size());
   }
 
   ASSERT_TRUE(vec.empty());
@@ -154,24 +155,28 @@ TEST_F(AutoVectorTest, Iterators) {
   // non-const iterator
   size_t index = 0;
   for (const auto& item : vec) {
-    ASSERT_EQ(vec[index++], item);
+    ASSERT_EQ(vec[index], item);
+    index++;
   }
 
   index = vec.size() - 1;
   for (auto pos = vec.rbegin(); pos != vec.rend(); ++pos) {
-    ASSERT_EQ(vec[index--], *pos);
+    ASSERT_EQ(vec[index], *pos);
+    index--;
   }
 
   // const iterator
   const auto& cvec = vec;
   index = 0;
   for (const auto& item : cvec) {
-    ASSERT_EQ(cvec[index++], item);
+    ASSERT_EQ(cvec[index], item);
+    index++;
   }
 
   index = vec.size() - 1;
   for (auto pos = cvec.rbegin(); pos != cvec.rend(); ++pos) {
-    ASSERT_EQ(cvec[index--], *pos);
+    ASSERT_EQ(cvec[index], *pos);
+    index--;
   }
 
   // forward and backward
