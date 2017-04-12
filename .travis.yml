@@ -17,9 +17,9 @@ cache:
 
 addons:
    apt:
-      sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-precise-3.6']
+      sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-4.0']
       packages:
-        - clang-3.6
+        - clang-4.0
         - g++-6
         - zlib1g-dev
         - libbz2-dev
@@ -52,7 +52,11 @@ matrix:
     env: TEST_GROUP=2
 
 before_script:
-  - if [[ "${TRAVIS_OS_NAME}" == 'linux' && "${CXX}" == 'clang++' ]]; then CXX=clang++-3.6; fi
+  - if [[ "${CXX}" == 'clang++' ]]; then
+      if [[ "${TRAVIS_OS_NAME}" == 'linux' ]]; then CXX=clang++-4.0; fi;
+      export EXTRA_CXXFLAGS="-Wno-unused-command-line-argument";
+      export EXTRA_CCFLAGS="-Wno-unused-command-line-argument";
+    fi
   # test one linux g++ build with g++-6
   - if [[ "${TRAVIS_OS_NAME}" == 'linux' && "${CXX}" == 'g++' && "${JOB_NAME}" == 'unittests' ]]; then CXX=g++-6; fi
   - if [[ "${TRAVIS_OS_NAME}" == 'osx' ]]; then
