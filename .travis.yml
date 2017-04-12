@@ -16,7 +16,17 @@ cache:
 addons:
    apt:
       sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-precise-3.6']
-      packages: ['clang-3.6' , 'g++-6', 'zlib1g-dev', 'libbz2-dev', 'libsnappy-dev', 'curl', 'libgflags-dev']
+      packages:
+        - clang-3.6
+        - g++-6
+        - zlib1g-dev
+        - libbz2-dev
+        - libsnappy-dev
+        - liblz4-dev
+        - curl
+        - libgflags-dev
+        - libjemalloc-dev
+        - libnuma-dev
 env:
   - TEST_GROUP=platform_dependent1
   - TEST_GROUP=platform_dependent2
@@ -43,6 +53,10 @@ before_script:
   - if [[ "${TRAVIS_OS_NAME}" == 'linux' && "${CXX}" == 'clang++' ]]; then CXX=clang++-3.6; fi
   # test one linux g++ build with g++-6
   - if [[ "${TRAVIS_OS_NAME}" == 'linux' && "${CXX}" == 'g++' && "${JOB_NAME}" == 'unittests' ]]; then CXX=g++-6; fi
+  - if [[ "${TRAVIS_OS_NAME}" == 'osx' ]]; then
+      brew update;
+      brew install jemalloc snappy lz4 lzo xz zstd;
+    fi
   # Limit the maximum number of open file descriptors to 8192
   - ulimit -n 8192 || true
 
