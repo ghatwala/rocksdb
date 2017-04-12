@@ -10,8 +10,10 @@ compiler:
 jdk:
   - oraclejdk7
 cache:
-  - ccache
-  - apt
+  ccache: true
+  apt: true
+  directories:
+     - /usr/local/Cellar
 
 addons:
    apt:
@@ -55,8 +57,12 @@ before_script:
   - if [[ "${TRAVIS_OS_NAME}" == 'linux' && "${CXX}" == 'g++' && "${JOB_NAME}" == 'unittests' ]]; then CXX=g++-6; fi
   - if [[ "${TRAVIS_OS_NAME}" == 'osx' ]]; then
       brew update;
-      brew install jemalloc snappy lz4 lzo xz zstd;
+      brew install ccache jemalloc snappy lz4 lzo xz zstd;
+      brew link ccache;
     fi
+  - mkdir -p "${HOME}"/bin ;
+  - ln -s `which ccache` "${HOME}/bin/${CXX}"
+  - export PATH="${HOME}/bin:${PATH}"
   # Limit the maximum number of open file descriptors to 8192
   - ulimit -n 8192 || true
 
@@ -70,6 +76,8 @@ script:
   - if [[ "${JOB_NAME}" == 'java_test' ]]; then OPT=-DTRAVIS V=1 make clean jclean rocksdbjava jtest; fi
   - if [[ "${JOB_NAME}" == 'lite_build' ]]; then OPT="-DTRAVIS -DROCKSDB_LITE" V=1 make -j4 static_lib; fi
   - if [[ "${JOB_NAME}" == 'examples' ]]; then OPT=-DTRAVIS V=1 make -j4 static_lib; cd examples; make -j4; fi
+  - ccache --show-stats
+
 notifications:
     email:
       - leveldb@fb.com
