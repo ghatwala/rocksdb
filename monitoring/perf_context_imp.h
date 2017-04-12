@@ -35,7 +35,7 @@ namespace rocksdb {
 
 #define PERF_CONDITIONAL_TIMER_FOR_MUTEX_GUARD(metric, condition)       \
   PerfStepTimer perf_step_timer_##metric(&(perf_context.metric), true); \
-  if ((condition)) {                                                    \
+  if (condition) {                                                      \
     perf_step_timer_##metric.Start();                                   \
   }
 
