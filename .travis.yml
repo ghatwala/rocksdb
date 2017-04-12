@@ -14,6 +14,7 @@ cache:
   apt: true
   directories:
      - /usr/local/Cellar
+     - ${HOME}/javadeps
 
 addons:
    apt:
@@ -67,6 +68,8 @@ before_script:
   - mkdir -p "${HOME}"/bin ;
   - ln -s `which ccache` "${HOME}/bin/${CXX}"
   - export PATH="${HOME}/bin:${PATH}"
+  - mkdir "${HOME}"/javadep
+  - ln -s "${HOME}"/javadep java/test-libs
   # Limit the maximum number of open file descriptors to 8192
   - ulimit -n 8192 || true
 
