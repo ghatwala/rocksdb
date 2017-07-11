@@ -80,8 +80,7 @@ void LRUHandleTable::Resize() {
   while (new_length < elems_ * 1.5) {
     new_length *= 2;
   }
-  LRUHandle** new_list = new LRUHandle*[new_length];
-  memset(new_list, 0, sizeof(new_list[0]) * new_length);
+  LRUHandle** new_list = new LRUHandle*[new_length]();
   uint32_t count = 0;
   for (uint32_t i = 0; i < length_; i++) {
     LRUHandle* h = list_[i];
