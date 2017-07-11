@@ -29,6 +29,7 @@ env:
   - JOB_NAME=examples # 5-7 minutes
   - JOB_NAME=cmake # 3-5 minutes
   - JOB_NAME=cmake-mingw # 3 minutes
+  - JOB_NAME=dbg
 
 matrix:
   exclude:
@@ -65,6 +66,7 @@ script:
   - if [ "${JOB_NAME}" == 'examples' ]; then OPT=-DTRAVIS V=1 make -j4 static_lib; cd examples; make -j4; fi
   - if [ "${JOB_NAME}" == 'cmake' ]; then mkdir build && cd build && cmake .. && make -j4 rocksdb; fi
   - if [ "${JOB_NAME}" == 'cmake-mingw' ]; then mkdir build && cd build && cmake .. -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ -DCMAKE_SYSTEM_NAME=Windows && make -j4 rocksdb; fi
+  - if [ "${JOB_NAME}" == 'dbg' ]; then make -j4 dbg; fi
 notifications:
     email:
       - leveldb@fb.com
