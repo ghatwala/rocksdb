@@ -58,8 +58,7 @@ jbyteArray Java_org_rocksdb_WriteBatchTest_getContents(
   rocksdb::ScopedArenaIterator iter(mem->NewIterator(
       rocksdb::ReadOptions(), &arena));
   for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
-    rocksdb::ParsedInternalKey ikey;
-    memset(reinterpret_cast<void*>(&ikey), 0, sizeof(ikey));
+    rocksdb::ParsedInternalKey ikey();
     bool parsed = rocksdb::ParseInternalKey(iter->key(), &ikey);
     if (!parsed) {
       assert(parsed);
