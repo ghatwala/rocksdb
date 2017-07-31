@@ -205,6 +205,8 @@ class ALIGN_AS(CACHE_LINE_SIZE) LRUCacheShard : public CacheShard {
   // Overloading to aligned it to cache line size
   void* operator new(size_t);
 
+  void* LRUCacheShard::operator new[](size_t, align_val_t);
+
   void operator delete(void *);
 
  private:

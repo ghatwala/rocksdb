@@ -237,6 +237,11 @@ void* LRUCacheShard::operator new(size_t size) {
   return rocksdb::port::cacheline_aligned_alloc(size);
 }
 
+void* LRUCacheShard::operator new[](size_t size, align_val_t al) {
+  assert(al == CACHE_LINE_SIZE);
+  return LRUCacheShard::operator new(size);
+}
+
 void LRUCacheShard::operator delete(void *memblock) {
   rocksdb::port::cacheline_aligned_free(memblock);
 }
