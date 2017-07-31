@@ -253,6 +253,7 @@ inline void cacheline_aligned_free(void *memblock) {
 // could not be worked around with by -mno-ms-bitfields
 #ifndef __MINGW32__
 #define ALIGN_AS(n) __declspec(align(n))
+#define __builtin_assume_aligned(X, SZ) (X)
 #else
 #define ALIGN_AS(n)
 #endif
