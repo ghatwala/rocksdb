@@ -461,7 +461,7 @@ LRUCache::LRUCache(size_t capacity, int num_shard_bits,
 #pragma warning(push)
 #pragma warning(disable: 4316) // We've validated the alignment with the new operators
 #endif
-  shards_ = (rocksdb::LRUCacheShard *) __builtin_assume_aligned(new LRUCacheShard[num_shards_], CACHE_LINE_SIZE);
+  shards_ = (rocksdb::LRUCacheShard *) __builtin_assume_aligned(new LRUCacheShard[num_shards_](), CACHE_LINE_SIZE);
 #if defined(_MSC_VER)
 #pragma warning(pop)
 #endif
