@@ -255,11 +255,12 @@ default: all
 WARNING_FLAGS = -W -Wextra -Wall -Wsign-compare -Wshadow \
   -Wno-unused-parameter
 
-CCVERSION = $(shell $(CXX) -dumpversion)
-CCNAME = $(shell $(CXX) --version | awk 'NR==1' | cut -f1 -d " ")
+CCVERSION = $(shell $(CXX) --version | awk 'NR==1 { print $3 }')
+CCNAME = $(shell $(CXX) --version | awk 'NR==1 { print $1 }')
 
+# Apple note: CCNAME ends up as Apple
 ifeq ($(CCNAME), clang)
-ifeq ($(CCVERSION), 4*)
+ifneq ($(CCVERSION), [23]\.*)
 	CXXFLAGS += -faligned-new
 endif
 else
