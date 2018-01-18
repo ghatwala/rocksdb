@@ -23,6 +23,8 @@
 
 namespace rocksdb {
 
+static const int kVerbose = 1;
+
 class DBPropertiesTest : public DBTestBase {
  public:
   DBPropertiesTest() : DBTestBase("/db_properties_test") {}
@@ -209,6 +211,18 @@ void VerifyTableProperties(const TableProperties& base_tp,
                            double index_size_bias = 0.1,
                            double data_size_bias = 0.1,
                            double num_data_blocks_bias = 0.05) {
+  if (kVerbose >= 1) {
+    fprintf(stderr, "data_size: base %6lu new_tp: %6lu\n",
+            base_tp.data_size, new_tp.data_size);
+    fprintf(stderr, "index_size: base %6lu new_tp: %6lu\n",
+            base_tp.index_size, new_tp.index_size);
+    fprintf(stderr, "filter_size: base %6lu new_tp: %6lu\n",
+            base_tp.filter_size, new_tp.filter_size);
+    fprintf(stderr, "num_data_blocks: base %6lu new_tp: %6lu\n",
+            base_tp.num_data_blocks, new_tp.num_data_blocks);
+    fprintf(stderr, "num_data_blocks: base %6lu new_tp: %6lu\n",
+            base_tp.num_data_blocks, new_tp.num_data_blocks);
+  }
   VerifySimilar(base_tp.data_size, new_tp.data_size, data_size_bias);
   VerifySimilar(base_tp.index_size, new_tp.index_size, index_size_bias);
   VerifySimilar(base_tp.filter_size, new_tp.filter_size, filter_size_bias);
