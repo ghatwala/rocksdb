@@ -1,6 +1,5 @@
 sudo: false
 language: cpp
-distro: xenial
 os:
   - linux
   - linux-ppc64le
@@ -21,6 +20,7 @@ cache:
 addons:
    apt:
       packages: ['zlib1g-dev', 'libbz2-dev', 'libsnappy-dev', 'curl', 'libgflags-dev', 'mingw-w64', 'clang-5.0']
+      sources: [ 'llvm-toolchain-trusty-5.0' ]
 env:
   - TEST_GROUP=platform_dependent # 16-18 minutes
   - TEST_GROUP=1 # 33-35 minutes
