@@ -19,7 +19,7 @@ cache:
 
 addons:
    apt:
-      packages: ['zlib1g-dev', 'libbz2-dev', 'libsnappy-dev', 'curl', 'libgflags-dev', 'mingw-w64']
+      packages: ['zlib1g-dev', 'libbz2-dev', 'libsnappy-dev', 'curl', 'libgflags-dev', 'mingw-w64', 'clang-5.0']
 env:
   - TEST_GROUP=platform_dependent # 16-18 minutes
   - TEST_GROUP=1 # 33-35 minutes
@@ -45,12 +45,21 @@ matrix:
     env: TEST_GROUP=3
   - os: osx
     env: TEST_GROUP=4
-  - os : osx
+  - os: osx
     env: JOB_NAME=cmake-mingw
-  - os : linux
+  - os: linux
+    compiler: clang
+  - os: linux-ppc64le
     compiler: clang
   - os : osx
     compiler: gcc
+  include:
+  - os: linux
+    env: JOB_NAME=lite_build
+    compiler: clang-5.0
+  - os: linux-ppc64le
+    env: JOB_NAME=lite_build
+    compiler: clang-5.0
 
 # https://docs.travis-ci.com/user/caching/#ccache-cache
 install:
