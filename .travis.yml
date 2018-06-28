@@ -16,7 +16,6 @@ cache:
   directories:
     - ${HOME}/cmake-dist
 
-
 addons:
    apt:
       packages: ['zlib1g-dev', 'libbz2-dev', 'libsnappy-dev', 'curl', 'libgflags-dev', 'mingw-w64', 'clang-5.0']
